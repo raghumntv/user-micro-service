@@ -1,6 +1,6 @@
 const fetch = require('node-fetch');
 
-
+// Comment
 const getUsers = async()=>{
     const response = await fetch('https://user-task-3kj1.onrender.com/users');
     const data = await response.json();
