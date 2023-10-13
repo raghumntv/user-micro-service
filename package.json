@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/index.js",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
     "dev": "env-cmd -f ./config/dev.env nodemon src/index.js",
     "test": "node src/test/user_api.js",
     "unit": "mocha src/unit/ --reporter mochawesome",
