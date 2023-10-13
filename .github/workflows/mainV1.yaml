@@ -46,23 +46,23 @@ jobs:
           name: mochawesome-report
           path: ./mochawesome-report
 
-    deploy:
-      name: Deploy test report
-      needs: build
-      runs-on: ubuntu-latest
+  deploy:
+    name: Deploy test report
+    needs: build
+    runs-on: ubuntu-latest
 
-      steps:
-        - name: Downloading artifact
-          uses: actions/download-artifact@v2
-          with:
-            name: mochawesome-report
-            path: ./mochawesome-report
+    steps:
+      - name: Downloading artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: mochawesome-report
+          path: ./mochawesome-report
 
-        - name: Deploying to gh-pages
-          uses: peaceiris/actions-gh-pages@v3
-          with:
-            github_token: ${{ secrets.GITHUB_TOKEN }}
-            publish_dir: ./mochawesome-report
+      - name: Deploying to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./mochawesome-report
 
 #  integration-test:
 #    name: Integration Tests
