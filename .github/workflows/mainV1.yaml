@@ -48,7 +48,6 @@ jobs:
 
   deploy:
     name: Deploy test report
-    needs: build
     runs-on: ubuntu-latest
 
     steps:
