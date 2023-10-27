@@ -5,10 +5,9 @@ const expect = chai.expect;
 describe('User Routes, Controller, and Factory (Unit Tests)',async()=>{
 
   it('User Routes, Controller, and Factory (Unit Tests)',async()=>{
-
-      const response = await fetch('https://user-task-3kj1.onrender.com/users');
+      const response = await fetch('https://user-service-azky.onrender.com/get-all-users');
       expect(response.status).to.equal(200);
       const data = await response.json();
       console.log(data);
-  }).timeout(40000);
+  }).timeout(50000);
 })
