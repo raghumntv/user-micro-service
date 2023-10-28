@@ -1,4 +1,4 @@
-name: Node.JS CI/CD
+name: User Service CI/CD
 
 on:
   push:
@@ -7,10 +7,31 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Sonar Scan
+        uses: sonarsource/sonarcloud-github-action@master
+        env:
+            GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+              -Dsonar.organization=sushantad-tv
+              -Dsonar.projectKey=sushantad-tv_user-micro-service
+
   unit-test:
     name: Unit Tests
+    needs: [static-analysis]
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +40,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Use Node.js
+      - name: Set up Node
         uses: actions/setup-node@v3
         with:
           node-version: 16.x
@@ -31,37 +52,31 @@ jobs:
         run: rm -rf ./mochawesome-report
 
       - name: Run Unit Tests
-        run: |
-          npm run unit
-          exit_code=$?
-          if [ $exit_code -ne 0 ]; then
-            echo "Unit Tests failed."
-            exit 1 # Exit with an error code to indicate failure
-          fi
+        run: npm run unit
 
       - name: Upload Mochawesome Report
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
         with:
-          name: mochawesome-report
+          name: test-result
           path: ./mochawesome-report
-
-      - name: Set up Git
-        if: ${{ always() }}
+      - name: Copy test execution result
         run: |
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          mkdir public
+          cp -r ./mochawesome-report public
+          mv ./mochawesome-report/mochawesome.html public/index.html
 
-      - name: Commit and Push Mochawesome Report
-        if: ${{ always() }}
-        run: |
-          git checkout -B gh-pages
-          git add ./mochawesome-report
-          git commit -m "Add Mochawesome report"
-          git push -f origin gh-pages 
+      - name: Deploy report page
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
 
   integration-test:
     name: Integration Tests
+    needs: [unit-test]
     runs-on: ubuntu-latest
 
     steps:
@@ -70,7 +85,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Use Node.js
+      - name: Set up Node
         uses: actions/setup-node@v3
         with:
           node-version: 16.x
@@ -79,11 +94,10 @@ jobs:
         run: npm install
 
       - name: Run Integration Tests
-        run: |
-          npm run integration          
+        run: npm run integration
 
   build:
-    name: User app
+    name: Build application
     needs: [unit-test,integration-test]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && failure() != true && needs.unit-test.result == 'success' # Only run on push to main branch if unit-test succeeds
@@ -95,12 +109,12 @@ jobs:
       - name: Checkout 
         uses: actions/checkout@v3 
 
-      - name: Use Node.JS ${{ matrix.node-version }}
+      - name: Set up Node
         uses: actions/setup-node@v3 
         with: 
           node-version: ${{ matrix.node-version }}
 
-      - name: NPM install,build
+      - name: build
         run: |
           docker-compose build   
               
@@ -111,23 +125,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps: 
-      - name: Deploy to production
+      - name: Deploy to Staging
         uses: johnbeynon/render-deploy-action@v0.0.8
         with:
           service-id: ${{ secrets.SERVICE_ID }} # Can be found as part of the Deploy Hook
           api-key: ${{ secrets.RENDER_API_KEY }} # Create your API key in Render Dashboard > Account Settings
-      - name: Deploy to prod
-        run: |
-          echo "code deployed to production"
 
-  #Test job
-  test:
+  e2e-tests:
     name: E2E tests
     needs: [deploy]
     runs-on: ubuntu-latest
  
     steps:
-      - name: Checkout Test Repository
+      - name: Checkout
         uses: actions/checkout@v3
         with:
           ref: main
@@ -135,3 +145,48 @@ jobs:
         run: |
           npm install
           npm test
+
+  slack-notfication:
+    name: Slack Notification
+    needs: [e2e-tests]
+    runs-on: ubuntu-latest
+
+#      SLACK_USERNAME: rtCamp
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Checkout code
+
+        uses: abinoda/slack-action@master
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        with:
+          args: '{\"channel\":\"C0612NY969K\",\"text\":\"Hello world\"}'
+
+#        id: slack
+#        uses: slackapi/slack-github-action@v1.24.0
+#        uses: rtCamp/action-slack-notify@v2
+#        env:
+#          SLACK_WEBHOOK: $${{ secrets.SLACK_WEBHOOK_URL }}
+#          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+#          SLACK_CHANNEL: otaku-2-workshop-slack-integration-testing
+#          SLACK_COLOR: ${{ job.status }} # or a specific color like 'good' or '#ff00ff'
+#          #      SLACK_ICON: https://github.com/rtCamp.png?size=48
+#          SLACK_MESSAGE: "GitHub build result: ${{ job.status }}\n${{ github.event.head_commit.url }}"
+#          SLACK_TITLE: User App action
+#        with:
+#          channel-id: 'C0612NY969K'
+#          slack-message: "GitHub build result: ${{ job.status }}\n${{ github.event.pull_request.html_url || github.event.head_commit.url }}"
+#          slack-message: "GitHub build result: ${{ job.status }}\n${{ github.event.head_commit.url }}"
+#        uses: pullreminders/slack-action@master
+#        with:
+#          status: ${{ job.status }}
+#          steps: ${{ toJson(steps) }}
+#          channel: '#otaku-2-workshop-slack-integration-testing'
+#          args: '{\"channel\":\"C0612NY969K\",\"text\":\"Hello world\"}'
+#      - name: Send Slack Notification
+#        uses: act10ns/slack@v1
+#        with:
+#          status: ${{ job.status }}
+#          steps: ${{ toJson(steps) }}
+#          channel: '#otaku-2-workshop-slack-integration-testing'
